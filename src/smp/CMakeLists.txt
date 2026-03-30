@@ -62,6 +62,7 @@ if(WIN32)
     include_directories(${PROJECT_SOURCE_DIR}/../../third_party/)
     include_directories(${PROJECT_SOURCE_DIR}/../rtf/include)
     include_directories(${PROJECT_SOURCE_DIR}/../../third_party/miniz)
+    include_directories(${PROJECT_SOURCE_DIR}/../../third_party/libharu/include)
     # ---------- LVGL ----------
     set(LV_CONF_PATH ${PROJECT_SOURCE_DIR}/../lvgl_ui/include/lv_conf.h CACHE STRING "" FORCE)
     set(LV_CONF_BUILD_DISABLE_EXAMPLES ON CACHE BOOL "Disable building lvgl examples" FORCE)
@@ -87,6 +88,7 @@ if(WIN32)
         ${PROJECT_SOURCE_DIR}/../../third_party/cjson/*.c
         ${PROJECT_SOURCE_DIR}/../rtf/*.c
         ${PROJECT_SOURCE_DIR}/../../third_party/miniz/*.c
+        ${PROJECT_SOURCE_DIR}/../../third_party/libharu/src/*.c
     )
     
     target_sources(${PROJECT_NAME} PRIVATE ${SMP_SOURCES})

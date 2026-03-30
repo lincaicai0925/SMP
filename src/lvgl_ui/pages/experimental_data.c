@@ -2,6 +2,7 @@
 #include "pages/include/experimental_data.h"
 #include "pages/include/data_dictionary.h"      
 #include "pages/include/docx_export.h"
+#include "pages/include/pdf_export.h"
 #include "pages/include/dashboard.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -431,7 +432,140 @@ static void export_word_cb(lv_event_t *e)
 static void export_pdf_cb(lv_event_t *e)
 {
     (void)e;
-    show_toast("PDF export - coming soon...", 0x7F8C8D);
+
+    /* ---------- 元信息 ---------- */
+    time_t now = time(NULL);
+    struct tm *t = localtime(&now);
+
+    pdf_field_t fields[4];
+    memset(fields, 0, sizeof(fields));
+
+    snprintf(fields[0].label, sizeof(fields[0].label),
+             "\xe6\x8a\xa5\xe5\x91\x8a\xe7\xbc\x96\xe5\x8f\xb7\xef\xbc\x9a");  /* 报告编号： */
+    snprintf(fields[0].value, sizeof(fields[0].value),
+             "RPT-%04d%02d%02d-%02d%02d%02d",
+             t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
+             t->tm_hour, t->tm_min, t->tm_sec);
+
+    snprintf(fields[1].label, sizeof(fields[1].label),
+             "\xe6\xb5\x8b\xe8\xaf\x95\xe6\x97\xa5\xe6\x9c\x9f\xef\xbc\x9a");  /* 测试日期： */
+    snprintf(fields[1].value, sizeof(fields[1].value),
+             "%04d-%02d-%02d %02d:%02d",
+             t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
+             t->tm_hour, t->tm_min);
+
+    snprintf(fields[2].label, sizeof(fields[2].label),
+             "\xe6\x93\x8d\xe4\xbd\x9c\xe5\x91\x98\xef\xbc\x9a");  /* 操作员： */
+    snprintf(fields[2].value, sizeof(fields[2].value), "---");
+
+    snprintf(fields[3].label, sizeof(fields[3].label),
+             "\xe8\xae\xbe\xe5\xa4\x87\xe5\x9e\x8b\xe5\x8f\xb7\xef\xbc\x9a");  /* 设备型号： */
+    snprintf(fields[3].value, sizeof(fields[3].value), "DEV_TYPE_LOAD_TESTER");
+
+    /* ---------- 数据表格 ---------- */
+    pdf_table_row_t rows[VAR_MAP_COUNT];
+    memset(rows, 0, sizeof(rows));
+
+    int i;
+    for (i = 0; i < VAR_MAP_COUNT; i++) {
+        snprintf(rows[i].name, sizeof(rows[i].name), "%s", VAR_MAP[i].bookmark);
+        snprintf(rows[i].desc, sizeof(rows[i].desc), "%s", VAR_DESCS[i]);
+        query_cur_val(VAR_MAP[i].bus_addr,
+                      rows[i].value, sizeof(rows[i].value));
+        snprintf(rows[i].unit, sizeof(rows[i].unit), "%s", VAR_UNITS[i]);
+    }
+
+    /* ---------- 图表截图 (转 JPEG) ---------- */
+    chart_snapshot_t snapshots[CHART_COUNT];
+    int chart_count = Dashboard_Get_Chart_Snapshots(snapshots, CHART_COUNT);
+
+    typedef struct { uint8_t *buf; uint32_t len; uint32_t cap; } jpg_buf_t;
+    static jpg_buf_t jpg_bufs[CHART_COUNT];
+    static uint8_t  *rgb_buf = NULL;
+    static uint32_t  rgb_buf_size = 0;
+
+    pdf_image_t images[CHART_COUNT];
+    uint32_t img_count = 0;
+
+    for (i = 0; i < chart_count && i < (int)CHART_COUNT; i++) {
+        uint32_t w = snapshots[i].width;
+        uint32_t h = snapshots[i].height;
+        uint32_t pixel_count = w * h;
+
+        if (!snapshots[i].buffer || pixel_count == 0) continue;
+
+        uint32_t needed = pixel_count * 3;
+        if (needed > rgb_buf_size) {
+            uint8_t *tmp = (uint8_t *)realloc(rgb_buf, needed);
+            if (!tmp) continue;
+            rgb_buf = tmp;
+            rgb_buf_size = needed;
+        }
+
+        rgb565_to_rgb888(snapshots[i].buffer, rgb_buf, pixel_count);
+
+        if (jpg_bufs[i].buf) { free(jpg_bufs[i].buf); }
+        memset(&jpg_bufs[i], 0, sizeof(jpg_buf_t));
+
+        stbi_write_jpg_to_func(stbi_write_cb, &jpg_bufs[i],
+                               (int)w, (int)h, 3, rgb_buf, 90);
+
+        if (jpg_bufs[i].len > 0) {
+            images[img_count].data      = jpg_bufs[i].buf;
+            images[img_count].data_size = jpg_bufs[i].len;
+            images[img_count].width     = w;
+            images[img_count].height    = h;
+            img_count++;
+        }
+    }
+
+    /* ---------- 路径 ---------- */
+    char font_path[512];
+    char output_path[512];
+
+    build_path(font_path, sizeof(font_path), "..\\fonts\\", "simkai.ttf");
+    /* 如果相对于 exe 的路径找不到字体，尝试项目 fonts 目录 */
+
+    char filename[128];
+    snprintf(filename, sizeof(filename),
+             "report_%04d%02d%02d_%02d%02d%02d.pdf",
+             t->tm_year + 1900, t->tm_mon + 1, t->tm_mday,
+             t->tm_hour, t->tm_min, t->tm_sec);
+    build_path(output_path, sizeof(output_path), "export\\", filename);
+
+#ifdef _WIN32
+    {
+        char export_dir[512];
+        build_path(export_dir, sizeof(export_dir), "export\\", "");
+        CreateDirectoryA(export_dir, NULL);
+    }
+#endif
+
+    /* ---------- 导出 ---------- */
+    pdf_export_config_t pdf_config;
+    memset(&pdf_config, 0, sizeof(pdf_config));
+    pdf_config.output_path  = output_path;
+    pdf_config.title        = "\xe6\xb5\x8b\xe8\xaf\x95\xe6\x8a\xa5\xe5\x91\x8a";  /* 测试报告 */
+    pdf_config.font_path    = font_path;
+    pdf_config.fields       = fields;
+    pdf_config.field_count  = 4;
+    pdf_config.rows         = rows;
+    pdf_config.row_count    = VAR_MAP_COUNT;
+    pdf_config.images       = (img_count > 0) ? images : NULL;
+    pdf_config.image_count  = img_count;
+
+    pdf_export_result_t result;
+    int ret = Pdf_Export(&pdf_config, &result);
+
+    if (ret == 0 && result.success) {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "PDF OK! %s", filename);
+        show_toast(msg, 0x27AE60);
+    } else {
+        char msg[256];
+        snprintf(msg, sizeof(msg), "PDF FAIL: %s", result.error_msg);
+        show_toast(msg, 0xE74C3C);
+    }
 }
 
 static void export_excel_cb(lv_event_t *e)
