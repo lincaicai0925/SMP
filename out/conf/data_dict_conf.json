@@ -1,0 +1,18 @@
+[
+{
+	"bus_addr":0,
+	"device_name":"",
+	"desc":"",
+	"modbus_addr":"",
+	"data_type":"float",
+	"data_len":32,
+	"rw":"R",
+	"thmin":0,
+	"thmax":0,
+	"alarm_level":0,
+	"default_value":0,
+	"decimal":0,
+	"subtype":0,
+	"bit_offset":0
+}
+]

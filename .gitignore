@@ -1,0 +1,10 @@
+set_local_env.cmake
+labez_build_info.*
+bak/
+tmp/
+build/
+*.7z
+.claude
+.cache
+.planning
+.planning/config.json

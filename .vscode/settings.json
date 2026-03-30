@@ -1,0 +1,11 @@
+{
+    "commentTranslate.source": "Bing",
+    "files.associations": {
+    "**/fonts/lv_font_*.c": "plaintext"
+  },
+  "commentTranslate.hover.enabled": true,
+  "todo-tree.tree.scanMode": "workspace",
+  "cmake.sourceDirectory": "C:/Users/hl/Desktop/SMP2026.3.29/src",
+  
+
+}
